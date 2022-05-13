@@ -65,9 +65,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let client = reqwest::Client::new();
     //
     // // let res = client.get("https://api.github.com/user")
-    // //     .header("Authorization", "token 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")
-    // //     .header("Content-Type", "application/json")
-    // //     .header("User-Agent", "AdUp/0.1")
     // //     .send().await?;
     // // let json = res.text().await?;
     // // println!("{json:?}");
