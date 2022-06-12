@@ -4,7 +4,7 @@ mod commands;
 mod utils;
 use utils::api::client::Api;
 
-use crate::utils::config::{load_config, update_config, Config};
+use crate::utils::config::Config;
 
 use self::commands::entry::{Cli, Commands};
 use self::utils::fs::download_elvui;
@@ -21,17 +21,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "elvui" => {
                 let elvui = download_elvui().await?;
 
-                let config = load_config()?;
+                let cfg = confy::load::<Config>("adup")?;
+                // let config = load_config()?;
 
-                let mut addons = config.get_addons().to_vec();
+                let mut addons = cfg.get_addons().to_vec();
                 addons.push(elvui);
 
                 let new_config = Config {
-                    game_location: config.get_game_location().into(),
-                    last_login: config.get_last_login().clone(),
+                    game_location: cfg.get_game_location().into(),
+                    last_login: cfg.get_last_login().clone(),
                     addons,
                 };
-                update_config(&new_config)?;
+                confy::store("adup", new_config)?;
+                // update_config(&new_config)?;
             }
             _ => {}
         },

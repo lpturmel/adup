@@ -11,6 +11,15 @@ pub struct Config {
     pub addons: Vec<Addon>,
 }
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            game_location: "".to_string(),
+            last_login: 0,
+            addons: vec![],
+        }
+    }
+}
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Addon {
     pub version: String,
