@@ -1,4 +1,4 @@
-use crate::utils::config::Addon;
+use crate::utils::config::{Addon, Config};
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest;
@@ -52,10 +52,11 @@ pub async fn download_remote_file(url: String) -> Result<(), Box<dyn std::error:
     let file_name = url.split("/").last().unwrap();
     println!("Finished downloading: {file_name} in {elapsed_http}ms");
 
-    let path_name = format!("/Users/lpturmel/dev/rust/adup/test/{file_name}");
+    let cfg = confy::load::<Config>("adup")?;
 
-    let path = Path::new(&path_name);
-    let mut file = File::create(&path)?;
+    let target_dir = Path::new(cfg.get_game_location());
+    let tmp_path = target_dir.join(file_name);
+    let mut file = File::create(&tmp_path)?;
     let mut downloaded: u64 = 0;
     let mut stream = response.bytes_stream();
 
@@ -71,10 +72,9 @@ pub async fn download_remote_file(url: String) -> Result<(), Box<dyn std::error:
 
     pb.finish_with_message(format!("Downloaded {file_name} in {elapsed_http}ms"));
     // std::io::copy(&mut content, &mut file)?;
-    let target_dir = Path::new("./test");
-    extract(file_name, &path, &target_dir);
+    extract(file_name, &tmp_path, &target_dir);
     // Cleanup
-    remove_file(&path)?;
+    remove_file(&tmp_path)?;
     Ok(())
 }
 

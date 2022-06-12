@@ -24,5 +24,7 @@ pub enum Commands {
 
     /// Get info about the logged in account
     Account,
+    /// Configuration commands
+    #[clap(arg_required_else_help = true)]
     Config(Config),
 }
