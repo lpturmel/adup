@@ -1,37 +1,45 @@
-use clap::{arg, Command};
-use std::fs::File;
-use std::io::Cursor;
-use std::path::Path;
-use std::time::Instant;
+use clap::Parser;
 
+mod commands;
 mod utils;
-use reqwest;
 use utils::api::client::Api;
+
+use crate::utils::config::{load_config, update_config, Config};
+
+use self::commands::entry::{Cli, Commands};
+use self::utils::fs::download_elvui;
 
 const AUTH_SERVICE: &'static str = "auth.adup.com";
 const AUTH_NAME: &'static str = "AdUp";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let matches = Command::new("Adup")
-        .about("Manager for Wow addons")
-        .subcommand_required(true)
-        .arg_required_else_help(true)
-        .allow_external_subcommands(true)
-        .subcommand(
-            Command::new("account")
-                .about("Get information about the current authenticated account"),
-        )
-        .subcommand(
-            Command::new("login")
-                .about("Log in to the github account")
-                .arg(arg!(<PAT> "The PAT to use"))
-                .arg_required_else_help(true),
-        )
-        .get_matches();
+    let cli = Cli::parse();
 
-    match matches.subcommand() {
-        Some(("account", _)) => {
+    match &cli.commands {
+        Commands::Install(args) => match args.name.as_str() {
+            "elvui" => {
+                let elvui = download_elvui().await?;
+
+                let config = load_config()?;
+
+                let mut addons = config.get_addons().to_vec();
+                addons.push(elvui);
+
+                let new_config = Config {
+                    game_location: config.get_game_location().into(),
+                    last_login: config.get_last_login().clone(),
+                    addons,
+                };
+                update_config(&new_config)?;
+            }
+            _ => {}
+        },
+        Commands::Login(args) => match keytar::set_password(AUTH_SERVICE, AUTH_NAME, &args.pat) {
+            Ok(_) => println!("Successfully logged in!"),
+            Err(e) => println!("Error while logging in: {e}"),
+        },
+        Commands::Account => {
             let token = keytar::get_password(AUTH_SERVICE, AUTH_NAME);
             match token {
                 Ok(pat) => {
@@ -45,65 +53,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        Some(("login", sub_matches)) => {
-            match keytar::set_password(
-                AUTH_SERVICE,
-                AUTH_NAME,
-                sub_matches.value_of("PAT").unwrap(),
-            ) {
-                Ok(_) => println!("Successfully logged in!"),
-                Err(e) => println!("Error while logging in: {e}"),
-            }
-        }
-        Some((value, _)) => {
-            println!("{value} is not a valid command!");
-        }
-        None => {
-            unreachable!()
-        }
     }
-    // let client = reqwest::Client::new();
-    //
-    // // let res = client.get("https://api.github.com/user")
-    // //     .send().await?;
-    // // let json = res.text().await?;
-    // // println!("{json:?}");
-    // let res = client
-    //     .get("https://www.tukui.org/download.php?ui=elvui")
-    //     .send()
-    //     .await?;
-    // let text = res.text().await?;
-    // if let Some(i) = text.find("/downloads/elvui-") {
-    //     let version = text[i..i + 26].to_string();
-    //
-    //     let tukui_url = "https://www.tukui.org";
-    //     let download_url = format!("{tukui_url}{version}");
-    //     download(download_url).await?;
-    // }
-
-    Ok(())
-}
-
-struct Addon {
-    version: String,
-    name: String,
-    src_url: String,
-}
-struct ElvUi {
-    version: String,
-}
-async fn download_remote_file(url: String) -> Result<(), Box<dyn std::error::Error>> {
-    let now = Instant::now();
-    let response = reqwest::get(&url).await?;
-    let file_name = url.split("/").last().unwrap();
-    let path_name = format!("./{file_name}");
-
-    let path = Path::new(&path_name);
-    let mut file = File::create(&path)?;
-
-    let mut content = Cursor::new(response.bytes().await?);
-    std::io::copy(&mut content, &mut file)?;
-    let elapsed = now.elapsed().as_millis();
-    println!("Finished downloading: {file_name} in {elapsed}ms");
     Ok(())
 }
