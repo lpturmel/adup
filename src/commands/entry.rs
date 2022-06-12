@@ -1,5 +1,6 @@
 use clap::{Parser, Subcommand};
 
+use super::config::command::Config;
 use super::install::command::Install;
 use super::login::command::Login;
 
@@ -23,4 +24,5 @@ pub enum Commands {
 
     /// Get info about the logged in account
     Account,
+    Config(Config),
 }
