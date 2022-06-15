@@ -1,4 +1,5 @@
 use crate::utils::config::{Addon, Config};
+use anyhow::Context;
 use futures_util::StreamExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest;
@@ -9,7 +10,9 @@ use std::io::{self, Write};
 use std::path::Path;
 use std::time::Instant;
 
-pub async fn download_elvui() -> Result<Addon, Box<dyn std::error::Error>> {
+use super::message::{Message, StdOut};
+
+pub async fn download_elvui() -> Result<Addon, anyhow::Error> {
     let client = reqwest::Client::new();
 
     let res = client
@@ -34,13 +37,13 @@ pub async fn download_elvui() -> Result<Addon, Box<dyn std::error::Error>> {
         None => panic!("Cannot find Elvui download path"),
     }
 }
-pub async fn download_remote_file(url: String) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn download_remote_file(url: String) -> Result<(), anyhow::Error> {
     let now = Instant::now();
     let response = reqwest::get(&url).await?;
 
     let total_size = response
         .content_length()
-        .ok_or("Failed to get content length for Elvui download")?;
+        .context("Failed to get content length for Elvui download")?;
 
     let pb = ProgressBar::new(total_size);
     pb.set_style(ProgressStyle::default_bar()
@@ -50,7 +53,7 @@ pub async fn download_remote_file(url: String) -> Result<(), Box<dyn std::error:
 
     let elapsed_http = now.elapsed().as_millis();
     let file_name = url.split("/").last().unwrap();
-    println!("Finished downloading: {file_name} in {elapsed_http}ms");
+    StdOut::success("Finished downloading: {file_name} in {elapsed_http}ms");
 
     let cfg = confy::load::<Config>("adup")?;
 
@@ -61,9 +64,9 @@ pub async fn download_remote_file(url: String) -> Result<(), Box<dyn std::error:
     let mut stream = response.bytes_stream();
 
     while let Some(item) = stream.next().await {
-        let chunk = item.or(Err(format!("Error while downloading file")))?;
+        let chunk = item.context(format!("Error while downloading file"))?;
         file.write_all(&chunk)
-            .or(Err(format!("Error while writing to file")))?;
+            .context(format!("Error while writing to file"))?;
         let new = min(downloaded + (chunk.len() as u64), total_size);
         downloaded = new;
         pb.set_position(new);
@@ -130,5 +133,8 @@ fn extract(file_name: &str, path_ref: &Path, target_dir: &Path) {
     }
 
     let elapsed = now.elapsed().as_millis();
-    println!("Finished extracting {file_name} in {elapsed}ms");
+    StdOut::success(&format!(
+        "Finished extracting {} in {}ms",
+        file_name, elapsed
+    ));
 }
