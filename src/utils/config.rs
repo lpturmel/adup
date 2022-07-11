@@ -20,6 +20,7 @@ impl Default for Config {
 pub struct Addon {
     pub version: String,
     pub folders: Vec<String>,
+    pub published_at: String,
     pub name: String,
 }
 impl Config {

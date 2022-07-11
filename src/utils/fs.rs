@@ -21,23 +21,45 @@ pub async fn download_elvui() -> Result<Addon, anyhow::Error> {
         .await?;
 
     let text = res.text().await?;
-    match text.find("/downloads/elvui-") {
-        Some(i) => {
-            let version = text[i..i + 26].to_string();
 
-            let tukui_url = "https://www.tukui.org";
-            let download_url = format!("{tukui_url}{version}");
-            download_remote_file(download_url).await?;
-            Ok(Addon {
-                name: "elvui".to_string(),
-                folders: vec![],
-                version,
-            })
-        }
-        None => panic!("Cannot find Elvui download path"),
-    }
+    let version_url = text
+        .lines()
+        .find(|line| line.contains("Download ElvUI"))
+        .map(|line| {
+            let url = line
+                .split("href=\"")
+                .nth(1)
+                .unwrap()
+                .split("\"")
+                .next()
+                .unwrap();
+            let url = url.split("\"").next().unwrap();
+            url.to_string()
+        })
+        .ok_or_else(|| anyhow::anyhow!("Could not find download link"))?;
+
+    let tukui_url = "https://www.tukui.org";
+    let download_url = format!("{tukui_url}{version_url}");
+    let extracted_dirs = download_remote_file(download_url).await?;
+    let now = chrono::Utc::now();
+    let version = version_url
+        .split("-")
+        .last()
+        .unwrap()
+        .to_string()
+        .split(".zip")
+        .next()
+        .unwrap()
+        .to_string();
+
+    Ok(Addon {
+        name: "elvui".to_string(),
+        folders: extracted_dirs,
+        published_at: now.to_string(),
+        version,
+    })
 }
-pub async fn download_remote_file(url: String) -> Result<(), anyhow::Error> {
+pub async fn download_remote_file(url: String) -> Result<Vec<String>, anyhow::Error> {
     let now = Instant::now();
     let response = reqwest::get(&url).await?;
 
@@ -74,18 +96,20 @@ pub async fn download_remote_file(url: String) -> Result<(), anyhow::Error> {
     // let mut content = Cursor::new(response.bytes().await?);
 
     pb.finish_with_message(format!("Downloaded {file_name} in {elapsed_http}ms"));
-    // std::io::copy(&mut content, &mut file)?;
-    extract(file_name, &tmp_path, &target_dir);
+
+    let extracted_dirs = extract(file_name, &tmp_path, &target_dir);
+
     // Cleanup
     remove_file(&tmp_path)?;
-    Ok(())
+    Ok(extracted_dirs)
 }
 
-fn extract(file_name: &str, path_ref: &Path, target_dir: &Path) {
+fn extract(file_name: &str, path_ref: &Path, target_dir: &Path) -> Vec<String> {
     let now = Instant::now();
     let file = fs::File::open(path_ref).unwrap();
 
     let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut extracted_dir: Vec<String> = vec![];
 
     for i in 0..archive.len() {
         let mut file = archive.by_index(i).unwrap();
@@ -94,11 +118,17 @@ fn extract(file_name: &str, path_ref: &Path, target_dir: &Path) {
             Some(path) => target_dir.join(path.to_owned()),
             None => continue,
         };
-
         {
             let comment = file.comment();
             if !comment.is_empty() {
                 println!("File {} comment: {}", i, comment);
+            }
+        }
+        if file.is_dir() {
+            let parent = file.name().split("/").next().unwrap();
+            let already_exists = extracted_dir.iter().any(|dir| dir == &parent.to_string());
+            if !already_exists {
+                extracted_dir.push(parent.to_string());
             }
         }
 
@@ -137,4 +167,18 @@ fn extract(file_name: &str, path_ref: &Path, target_dir: &Path) {
         "Finished extracting {} in {}ms",
         file_name, elapsed
     ));
+    extracted_dir
+}
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_can_find_elvui_version() {
+        let text = "<a href='/downloads/elvui-12.81.zip' class='btn btn-mod btn-border-w btn-round btn-large'>Download ElvUI 12.81</a>";
+
+        let version_start = text.find("-").unwrap();
+        let version_end = text.find("zip").unwrap();
+        let version = text[version_start + 1..version_end - 1].to_string();
+
+        assert_eq!(version, "12.81");
+    }
 }

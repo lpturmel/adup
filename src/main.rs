@@ -1,6 +1,7 @@
 use anyhow::{bail, Context};
 use clap::Parser;
 
+mod addons;
 mod commands;
 mod utils;
 use utils::api::client::Api;
@@ -34,7 +35,14 @@ async fn run() -> anyhow::Result<(), anyhow::Error> {
                     if cfg.get_game_location() == "" {
                         bail!("No game location set in config! Use command config location set to set it");
                     }
+
+                    let elvui_installed = cfg.addons.iter().any(|addon| addon.name == "elvui");
+                    if elvui_installed {
+                        bail!("ElvUI is already installed! Use update command to update it!");
+                    }
+
                     let elvui = download_elvui().await?;
+                    println!("Elvui structure: {:?}", elvui);
 
                     let mut addons = cfg.get_addons().to_vec();
                     addons.push(elvui);
@@ -81,6 +89,7 @@ async fn run() -> anyhow::Result<(), anyhow::Error> {
                     match location_cmd {
                         LocationCommands::Get => {
                             let current_loc = cfg.get_game_location();
+
                             StdOut::info(&format!("Current game location: {}", current_loc));
                         }
                         LocationCommands::Set(args) => {
@@ -105,6 +114,27 @@ async fn run() -> anyhow::Result<(), anyhow::Error> {
                         }
                     }
                 }
+            }
+        }
+        Commands::Delete(args) => {
+            let mut cfg = confy::load::<Config>("adup")?;
+
+            let addon_to_delete = &cfg.addons.iter().find(|addon| addon.name == args.name);
+
+            match addon_to_delete {
+                Some(addon) => {
+                    let dirs_to_delete = &addon.folders;
+
+                    for dir in dirs_to_delete {
+                        let path = Path::new(&cfg.game_location.clone()).join(dir);
+                        println!("Deleting: {}", path.display());
+                        std::fs::remove_dir_all(path).context("Could not delete addon folder")?;
+                    }
+                    cfg.addons.retain(|a| a.name != args.name);
+                    confy::store("adup", cfg)?;
+                    StdOut::success(&format!("Successfully deleted addon: {}", args.name));
+                }
+                None => bail!("{} is not installed", args.name),
             }
         }
     }

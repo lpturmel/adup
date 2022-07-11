@@ -16,6 +16,7 @@ clap = { version = "3.1.18", features = ["derive"] }
 zip = "0.6.2"
 indicatif = "0.16.2"
 futures-util = "0.3.21"
-confy = "0.4.0"
 console = "0.15.0"
 anyhow = "1.0.57"
+chrono = "0.4.19"
+confy = "0.4.0"

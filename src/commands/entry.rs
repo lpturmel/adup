@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 
 use super::config::command::Config;
+use super::delete::Delete;
 use super::install::command::Install;
 use super::login::command::Login;
 
@@ -27,4 +28,8 @@ pub enum Commands {
     /// Configuration commands
     #[clap(arg_required_else_help = true)]
     Config(Config),
+
+    /// Delete an addon
+    #[clap(arg_required_else_help = true)]
+    Delete(Delete),
 }
